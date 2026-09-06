@@ -80,8 +80,10 @@ struct ContentView: View {
     /// always clicks at the tempo of whatever you're looking at.
     private func adoptSelectedTempo() {
         guard let index = library.index(of: selection) else { return }
+        // Browsing to another song while something is counting should not cut
+        // the click off; the sidebar play buttons switch songs deliberately.
+        guard !metronome.isRunning else { return }
         let song = library.songs[index]
-        if metronome.isRunning { metronome.stop() }
         metronome.bpm = song.bpm
         metronome.beatsPerBar = song.beatsPerBar
     }
@@ -89,24 +91,41 @@ struct ContentView: View {
 
 private struct SongRow: View {
     let song: Song
+    @EnvironmentObject private var metronome: Metronome
+
+    private var isPlaying: Bool { metronome.isPlaying(song) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(song.title.isEmpty ? "Untitled" : song.title)
-                .lineLimit(1)
-            HStack(spacing: 4) {
-                Text(song.artist.isEmpty ? "\u{2014}" : song.artist)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                if !song.key.isEmpty {
-                    Text(MusicalKey.short(song.key))
-                    Text("\u{00B7}")
-                }
-                Text("\(Int(song.bpm.rounded()))")
-                    .monospacedDigit()
+        HStack(spacing: 8) {
+            Button {
+                metronome.toggle(song)
+            } label: {
+                Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+                    .font(.system(size: 11))
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .buttonStyle(.borderless)
+            .foregroundStyle(isPlaying ? Color.accentColor : Color.secondary)
+            .help(isPlaying ? "Stop metronome" : "Play metronome at \(Int(song.bpm.rounded())) BPM")
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song.title.isEmpty ? "Untitled" : song.title)
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(song.artist.isEmpty ? "\u{2014}" : song.artist)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    if !song.key.isEmpty {
+                        Text(MusicalKey.short(song.key))
+                        Text("\u{00B7}")
+                    }
+                    Text("\(Int(song.bpm.rounded()))")
+                        .monospacedDigit()
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
         }
         .padding(.vertical, 2)
     }

@@ -158,7 +158,10 @@ struct LookupSheet: View {
 }
 
 struct SettingsView: View {
-    @State private var apiKey: String = Keychain.get(BPMLookup.keychainAccount) ?? ""
+    // Not a @State default: SwiftUI re-runs those on every struct init, which
+    // would mean another Keychain hit each time the window redraws.
+    @State private var apiKey: String = ""
+    @State private var loaded = false
     @State private var saved = false
 
     var body: some View {
@@ -169,6 +172,7 @@ struct SettingsView: View {
                 HStack {
                     Button("Save") {
                         Keychain.set(apiKey, for: BPMLookup.keychainAccount)
+                        BPMLookup.invalidateKeyCache()
                         saved = true
                     }
                     if saved {
@@ -188,6 +192,11 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 440)
         .padding(.vertical, 8)
+        .onAppear {
+            guard !loaded else { return }
+            apiKey = BPMLookup.storedKey ?? ""
+            loaded = true
+        }
         .onChange(of: apiKey) { _, _ in saved = false }
     }
 }

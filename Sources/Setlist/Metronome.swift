@@ -56,6 +56,10 @@ final class Metronome: ObservableObject {
     @Published var volume: Double = 0.5 { didSet { state.gain = volume } }
     @Published private(set) var isRunning = false
 
+    /// Which song the click is currently counting, so the sidebar row and the
+    /// transport bar can show the same play/stop state.
+    @Published private(set) var currentSongID: UUID?
+
     /// Beat within the bar, 0-based. Polled by the UI for the flash indicator.
     @Published private(set) var displayBeat: Int = 0
 
@@ -154,9 +158,32 @@ final class Metronome: ObservableObject {
         indicatorTimer?.invalidate()
         indicatorTimer = nil
         displayBeat = 0
+        currentSongID = nil
     }
 
     func toggle() { isRunning ? stop() : start() }
+
+    /// Start counting a specific song, switching tempo if something else is
+    /// already playing.
+    func play(_ song: Song) {
+        if isRunning { stop() }
+        bpm = song.bpm
+        beatsPerBar = song.beatsPerBar
+        start()
+        currentSongID = song.id
+    }
+
+    func toggle(_ song: Song) {
+        if isRunning && currentSongID == song.id {
+            stop()
+        } else {
+            play(song)
+        }
+    }
+
+    func isPlaying(_ song: Song) -> Bool {
+        isRunning && currentSongID == song.id
+    }
 
     private func applyTempo() {
         let clamped = min(max(bpm, 20), 400)

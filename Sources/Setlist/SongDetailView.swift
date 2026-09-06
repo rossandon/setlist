@@ -97,14 +97,14 @@ private struct TransportBar: View {
     }
 
     private var playButton: some View {
-        Button(action: { metronome.toggle() }) {
-            Image(systemName: metronome.isRunning ? "stop.fill" : "play.fill")
+        Button(action: { metronome.toggle(song) }) {
+            Image(systemName: metronome.isPlaying(song) ? "stop.fill" : "play.fill")
                 .font(.system(size: 17))
                 .frame(width: 40, height: 32)
         }
         .buttonStyle(.borderedProminent)
         .keyboardShortcut("m", modifiers: .command)
-        .help(metronome.isRunning ? "Stop metronome (\u{2318}M)" : "Start metronome (\u{2318}M)")
+        .help(metronome.isPlaying(song) ? "Stop metronome (\u{2318}M)" : "Start metronome (\u{2318}M)")
     }
 
     private var tempoControls: some View {
@@ -172,7 +172,7 @@ private struct TransportBar: View {
     }
 
     private func color(for beat: Int) -> Color {
-        guard metronome.isRunning, metronome.displayBeat == beat else {
+        guard metronome.isPlaying(song), metronome.displayBeat == beat else {
             return Color.secondary.opacity(0.22)
         }
         return beat == 0 ? .accentColor : Color.secondary.opacity(0.75)

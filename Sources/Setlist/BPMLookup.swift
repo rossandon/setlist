@@ -53,7 +53,28 @@ final class BPMLookup: ObservableObject {
 
     static let keychainAccount = "getsongbpm-api-key"
 
-    var apiKey: String? { Keychain.get(Self.keychainAccount) }
+    // Read the Keychain once per launch and cache it. SwiftUI re-evaluates a
+    // view's body constantly -- once per keystroke in a text field -- and
+    // hitting SecItemCopyMatching on each pass produces a storm of
+    // authorization prompts.
+    private static var cachedKey: String?
+    private static var didLoadKey = false
+
+    static func invalidateKeyCache() {
+        cachedKey = nil
+        didLoadKey = false
+    }
+
+    /// The single Keychain read point for the whole app.
+    static var storedKey: String? {
+        if !didLoadKey {
+            cachedKey = Keychain.get(keychainAccount)
+            didLoadKey = true
+        }
+        return cachedKey
+    }
+
+    var apiKey: String? { Self.storedKey }
     var hasAPIKey: Bool { apiKey != nil }
 
     func clear() {
