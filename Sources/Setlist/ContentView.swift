@@ -7,6 +7,15 @@ struct ContentView: View {
     @State private var selection: Song.ID?
     @State private var search = ""
 
+    @State private var showingNewSong = false
+    @State private var newTitle = ""
+    @State private var newArtist = ""
+    @State private var newConfirmed = false
+
+    /// Set after a song is created so its detail view opens the lookup sheet
+    /// once it appears.
+    @State private var autoLookupID: Song.ID?
+
     private var visibleSongs: [Song] {
         let query = search.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return library.songs }
@@ -22,7 +31,7 @@ struct ContentView: View {
             sidebar
         } detail: {
             if let index = library.index(of: selection) {
-                SongDetailView(song: $library.songs[index])
+                SongDetailView(song: $library.songs[index], autoLookupID: $autoLookupID)
                     .id(library.songs[index].id)
             } else {
                 ContentUnavailableView(
@@ -37,6 +46,11 @@ struct ContentView: View {
         .onChange(of: selection) { _, _ in adoptSelectedTempo() }
         .onReceive(NotificationCenter.default.publisher(for: .newSongRequested)) { _ in
             newSong()
+        }
+        // Creating the song happens on dismissal rather than inside the sheet,
+        // so the lookup sheet is never asked to open while another is closing.
+        .sheet(isPresented: $showingNewSong, onDismiss: finishNewSong) {
+            NewSongSheet(title: $newTitle, artist: $newArtist, confirmed: $newConfirmed)
         }
     }
 
@@ -65,9 +79,31 @@ struct ContentView: View {
     }
 
     private func newSong() {
+        newTitle = ""
+        newArtist = ""
+        newConfirmed = false
+        showingNewSong = true
+    }
+
+    private func finishNewSong() {
+        guard newConfirmed else { return }
+        newConfirmed = false
+
+        let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+
+        // Clear any filter, or the song just created may not be visible.
         search = ""
-        let song = library.addSong()
+        let song = library.addSong(
+            title: title,
+            artist: newArtist.trimmingCharacters(in: .whitespacesAndNewlines))
         selection = song.id
+
+        // Only jump into lookup when it can actually do something; without a
+        // key the sheet would only be able to say so.
+        if BPMLookup.storedKey != nil {
+            autoLookupID = song.id
+        }
     }
 
     private func deleteSelection() {

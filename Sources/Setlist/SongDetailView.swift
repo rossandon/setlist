@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SongDetailView: View {
     @Binding var song: Song
+    @Binding var autoLookupID: Song.ID?
     @EnvironmentObject private var metronome: Metronome
 
     @State private var showingLookup = false
@@ -18,6 +19,8 @@ struct SongDetailView: View {
         .sheet(isPresented: $showingLookup) {
             LookupSheet(song: $song)
         }
+        .onAppear(perform: openLookupIfRequested)
+        .onChange(of: autoLookupID) { _, _ in openLookupIfRequested() }
         .onChange(of: song.bpm) { _, new in
             song.updatedAt = Date()
             metronome.bpm = new
@@ -29,6 +32,14 @@ struct SongDetailView: View {
         .onChange(of: song.key) { _, _ in song.updatedAt = Date() }
         .onChange(of: song.lyrics) { _, _ in song.updatedAt = Date() }
         .onChange(of: song.title) { _, _ in song.updatedAt = Date() }
+    }
+
+    private func openLookupIfRequested() {
+        guard autoLookupID == song.id else { return }
+        autoLookupID = nil
+        // Let the new-song sheet finish dismissing first; presenting a second
+        // sheet in the same runloop turn can be dropped silently.
+        DispatchQueue.main.async { showingLookup = true }
     }
 
     private var header: some View {

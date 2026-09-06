@@ -85,8 +85,10 @@ final class Library: ObservableObject {
     }
 
     @discardableResult
-    func addSong() -> Song {
-        let song = Song()
+    func addSong(title: String = "Untitled", artist: String = "") -> Song {
+        var song = Song()
+        song.title = title
+        song.artist = artist
         songs.insert(song, at: 0)
         return song
     }
