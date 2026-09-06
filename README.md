@@ -30,6 +30,15 @@ Requires the Xcode Command Line Tools. Xcode itself is not needed.
 open Setlist.app
 ```
 
+To install into `/Applications` so it appears in Launchpad and Spotlight:
+
+```
+./build.sh --install
+```
+
+That quits any running copy, replaces the installed bundle, and re-registers it
+with LaunchServices.
+
 `build.sh` calls `swiftc` directly rather than going through Swift Package
 Manager. The app has no third-party dependencies, so nothing is lost by doing
 so, and it sidesteps a SwiftPM breakage caused by mismatched Command Line Tools
@@ -54,6 +63,15 @@ To inspect the raw API response while debugging:
 
 ```
 ./tools/probe-getsongbpm.sh YOUR_API_KEY "Song Title" "Artist Name"
+```
+
+## Icon
+
+The app icon is drawn in code (`tools/make-icon.swift`) rather than shipped as
+a binary asset, so it stays diffable. Regenerate after changing the artwork:
+
+```
+./tools/make-icon.sh
 ```
 
 ## Credits
