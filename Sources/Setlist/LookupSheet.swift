@@ -102,7 +102,7 @@ struct LookupSheet: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(candidate.title).fontWeight(.medium)
-                    Text([candidate.artist, candidate.album]
+                    Text([candidate.artist, candidate.album, candidate.year]
                         .filter { !$0.isEmpty }
                         .joined(separator: " \u{2014} "))
                         .font(.caption)

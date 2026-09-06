@@ -10,6 +10,7 @@ struct LookupCandidate: Identifiable, Hashable {
     let rawKey: String?        // exactly what the service returned
     let timeSignature: String?
     let beatsPerBar: Int?
+    let year: String
 }
 
 enum LookupError: LocalizedError {
@@ -69,15 +70,15 @@ final class BPMLookup: ObservableObject {
         guard !title.isEmpty else { errorMessage = LookupError.emptyQuery.localizedDescription; return }
         guard let key = apiKey else { errorMessage = LookupError.missingAPIKey.localizedDescription; return }
 
-        // Their lookup grammar is a single field: "song:TITLE artist:ARTIST".
-        var lookup = "song:\(title)"
-        if !artist.isEmpty { lookup += " artist:\(artist)" }
-
+        // The lookup term is the bare title. Field-prefixed forms such as
+        // "song:TITLE artist:ARTIST" are accepted by the endpoint but always
+        // match nothing, and so does appending the artist to the term, so the
+        // artist is applied below as a client-side ranking instead.
         var components = URLComponents(string: "https://api.getsong.co/search/")!
         components.queryItems = [
             URLQueryItem(name: "api_key", value: key),
             URLQueryItem(name: "type", value: "song"),
-            URLQueryItem(name: "lookup", value: lookup),
+            URLQueryItem(name: "lookup", value: title),
         ]
         guard let url = components.url else { errorMessage = LookupError.unreadable.localizedDescription; return }
 
@@ -94,9 +95,17 @@ final class BPMLookup: ObservableObject {
 
             let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
 
-            // The service reports its own errors in the body, including for 401.
+            // Errors arrive in two shapes: a top-level "error" for an invalid
+            // key, and a nested {"search": {"error": ...}} for a miss.
             if let message = root?["error"] as? String {
                 errorMessage = LookupError.service(message).localizedDescription
+                return
+            }
+            if let nested = root?["search"] as? [String: Any],
+               let message = nested["error"] as? String {
+                errorMessage = message.lowercased().contains("no result")
+                    ? "No matches for \u{201C}\(title)\u{201D}."
+                    : LookupError.service(message).localizedDescription
                 return
             }
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
@@ -109,9 +118,9 @@ final class BPMLookup: ObservableObject {
             }
 
             let items = BPMLookup.resultArray(in: root)
-            candidates = items.compactMap(BPMLookup.candidate(from:))
+            candidates = BPMLookup.ranked(items.compactMap(BPMLookup.candidate(from:)), byArtist: artist)
             if candidates.isEmpty {
-                errorMessage = "No matches for \u{201C}\(title)\u{201D}\(artist.isEmpty ? "" : " by \(artist)")."
+                errorMessage = "No matches for \u{201C}\(title)\u{201D}."
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -121,10 +130,11 @@ final class BPMLookup: ObservableObject {
     // MARK: - Tolerant parsing
 
     /// The result array has appeared under a few names; take whichever exists.
-    private static func resultArray(in root: [String: Any]) -> [[String: Any]] {
+    static func resultArray(in root: [String: Any]) -> [[String: Any]] {
         for name in ["search", "songs", "song", "result", "results", "data"] {
             if let array = root[name] as? [[String: Any]] { return array }
-            if let single = root[name] as? [String: Any] { return [single] }
+            // A lone object here is the error envelope, not a result.
+            if let single = root[name] as? [String: Any], single["error"] == nil { return [single] }
         }
         return []
     }
@@ -153,7 +163,7 @@ final class BPMLookup: ObservableObject {
         return nil
     }
 
-    private static func candidate(from item: [String: Any]) -> LookupCandidate? {
+    static func candidate(from item: [String: Any]) -> LookupCandidate? {
         let title = string(item, ["title", "song_title", "name"]) ?? ""
         guard !title.isEmpty else { return nil }
 
@@ -170,8 +180,30 @@ final class BPMLookup: ObservableObject {
             key: rawKey.flatMap(normalizedKey(from:)),
             rawKey: rawKey,
             timeSignature: timeSig,
-            beatsPerBar: timeSig.flatMap(beatsPerBar(from:))
+            beatsPerBar: timeSig.flatMap(beatsPerBar(from:)),
+            year: nested(item, "album", ["year"]) ?? ""
         )
+    }
+
+    /// Search matches on title only, so a common title returns 30 recordings
+    /// by different artists. Float the ones matching the artist you typed to
+    /// the top rather than filtering, since spellings differ ("The Beatles"
+    /// vs "Beatles") and dropping a near-match would hide the right answer.
+    static func ranked(_ items: [LookupCandidate], byArtist artist: String) -> [LookupCandidate] {
+        let needle = artist.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return items }
+        return items.enumerated().sorted { lhs, rhs in
+            let l = score(lhs.element.artist, needle), r = score(rhs.element.artist, needle)
+            return l == r ? lhs.offset < rhs.offset : l > r
+        }.map(\.element)
+    }
+
+    private static func score(_ candidateArtist: String, _ needle: String) -> Int {
+        let name = candidateArtist.lowercased()
+        if name == needle { return 3 }
+        if name.contains(needle) || needle.contains(name) { return 2 }
+        let words = Set(needle.split(separator: " ")).subtracting(["the", "and", "&"])
+        return words.contains(where: name.contains) ? 1 : 0
     }
 
     /// Map what the service returns ("G", "Gm", "F#", "Bb minor") onto the
