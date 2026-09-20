@@ -120,8 +120,15 @@ struct ContentView: View {
               characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) })
         else { return .ignored }
 
-        // A leading space matches everything, so let the list have it.
-        if characters == " " && typeSelect.buffer.isEmpty { return .ignored }
+        // Space is overloaded, so the rule has to be unambiguous: while typing
+        // it belongs to the search term, which is what makes multi-word titles
+        // reachable. Idle, it starts or stops the metronome on the selected
+        // song.
+        if characters == " " && typeSelect.buffer.isEmpty {
+            guard let index = library.index(of: selection) else { return .ignored }
+            metronome.toggle(library.songs[index])
+            return .handled
+        }
 
         typeSelect.append(characters)
         applyTypeSelect(proxy)
