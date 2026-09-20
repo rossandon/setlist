@@ -18,12 +18,12 @@ struct ContentView: View {
 
     private var visibleSongs: [Song] {
         let query = search.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return library.songs }
-        return library.songs.filter {
+        let matches = query.isEmpty ? library.songs : library.songs.filter {
             $0.title.localizedCaseInsensitiveContains(query)
                 || $0.artist.localizedCaseInsensitiveContains(query)
                 || $0.lyrics.localizedCaseInsensitiveContains(query)
         }
+        return matches.sorted(by: Song.alphabetically)
     }
 
     var body: some View {

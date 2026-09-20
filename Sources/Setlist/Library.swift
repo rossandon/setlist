@@ -30,6 +30,31 @@ struct Song: Identifiable, Codable, Hashable {
     }
 }
 
+extension Song {
+    /// What the row actually shows, so sorting matches the visible text rather
+    /// than an empty string hiding at the top of the list.
+    var displayTitle: String { title.isEmpty ? "Untitled" : title }
+
+    /// Finder-style ordering: case- and diacritic-insensitive, and numbers
+    /// compare numerically so "Take 2" precedes "Take 10".
+    ///
+    /// Falls through to artist and finally id. Swift's sort is not stable, so
+    /// without a total ordering two songs sharing a title would be free to
+    /// swap places on any re-render and the rows would visibly jitter.
+    static func alphabetically(_ lhs: Song, _ rhs: Song) -> Bool {
+        switch lhs.displayTitle.localizedStandardCompare(rhs.displayTitle) {
+        case .orderedAscending: return true
+        case .orderedDescending: return false
+        case .orderedSame:
+            switch lhs.artist.localizedStandardCompare(rhs.artist) {
+            case .orderedAscending: return true
+            case .orderedDescending: return false
+            case .orderedSame: return lhs.id.uuidString < rhs.id.uuidString
+            }
+        }
+    }
+}
+
 enum MusicalKey {
     static let noteNames = ["C", "C\u{266F}", "D", "E\u{266D}", "E", "F",
                             "F\u{266F}", "G", "A\u{266D}", "A", "B\u{266D}", "B"]
